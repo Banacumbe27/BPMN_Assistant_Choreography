@@ -22,14 +22,17 @@ class DetermineIntentRequest(BaseModel):
 
 class ModifyBpmnRequest(BaseModel):
     message_history: list[MessageItem]  # The message history
-    process: list[dict[str, Any]] | None  # The process to be updated (if it exists)
+    # The model to be updated (if it exists). A process list (single pool), or a
+    # collaboration/choreography dict.
+    process: list[dict[str, Any]] | dict[str, Any] | None
     model: str  # The model to be used
     api_keys: dict[str, str] | None = None  # Optional API keys from user
 
 
 class ConversationalRequest(BaseModel):
     message_history: list[MessageItem]  # The message history
-    process: list[dict[str, Any]] | None  # The current process (if it exists)
+    # The current model (if it exists): process list or collaboration/choreography dict.
+    process: list[dict[str, Any]] | dict[str, Any] | None
     model: str  # The model to be used
     needs_to_be_final_comment: bool  # Whether the response needs to be a comment after the process is created/edited
     api_keys: dict[str, str] | None = None  # Optional API keys from user

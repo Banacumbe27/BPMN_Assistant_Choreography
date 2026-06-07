@@ -130,6 +130,80 @@ class TestChoreographyXml:
         with pytest.raises(ValueError):
             validate_model(buyer_seller_choreography)
 
+    def test_branched_choreography_validates(self):
+        """A choreographyTask inside a gateway branch must validate (regression)."""
+        model = {
+            "participants": [
+                {"id": "client", "name": "Client"},
+                {"id": "contractor", "name": "Contractor"},
+            ],
+            "choreography": [
+                {"type": "startEvent", "id": "st"},
+                {
+                    "type": "choreographyTask",
+                    "id": "t1",
+                    "name": "Request quote",
+                    "initiator": "client",
+                    "recipient": "contractor",
+                    "message": "Request",
+                },
+                {
+                    "type": "exclusiveGateway",
+                    "id": "g",
+                    "label": "Accepted?",
+                    "has_join": False,
+                    "branches": [
+                        {
+                            "condition": "Accepted",
+                            "path": [
+                                {
+                                    "type": "choreographyTask",
+                                    "id": "t2",
+                                    "name": "Accept",
+                                    "initiator": "client",
+                                    "recipient": "contractor",
+                                },
+                                {"type": "endEvent", "id": "e1"},
+                            ],
+                        },
+                        {"condition": "Declined", "path": [{"type": "endEvent", "id": "e2"}]},
+                    ],
+                },
+            ],
+        }
+        validate_model(model)  # must not raise
+        # and it must produce well-formed XML + DI
+        _, shapes, _ = _di_shapes_edges(model)
+        assert {"t1", "t2"}.issubset({s.get("bpmnElement") for s in shapes})
+
+
+class TestRequestSchemaAcceptsDict:
+    """The HTTP request models must accept collaboration/choreography dicts, not
+    only process lists (regression: 'Input should be a valid list')."""
+
+    def test_modify_request_accepts_dict(self, buyer_seller_choreography):
+        from bpmn_assistant.api.requests import ModifyBpmnRequest
+
+        ModifyBpmnRequest(
+            message_history=[], process=buyer_seller_choreography, model="gpt-4.1"
+        )
+
+    def test_talk_request_accepts_dict(self, customer_supplier_collaboration):
+        from bpmn_assistant.api.requests import ConversationalRequest
+
+        ConversationalRequest(
+            message_history=[{"role": "user", "content": "x"}],
+            process=customer_supplier_collaboration,
+            model="gpt-4.1",
+            needs_to_be_final_comment=True,
+        )
+
+    def test_modify_request_still_accepts_list_and_none(self, linear_process):
+        from bpmn_assistant.api.requests import ModifyBpmnRequest
+
+        ModifyBpmnRequest(message_history=[], process=linear_process, model="gpt-4.1")
+        ModifyBpmnRequest(message_history=[], process=None, model="gpt-4.1")
+
 
 class TestLayoutDi:
     def _assert_bounds_valid(self, shapes):
