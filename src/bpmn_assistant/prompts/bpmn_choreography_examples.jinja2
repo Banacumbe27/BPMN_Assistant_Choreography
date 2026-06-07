@@ -1,0 +1,110 @@
+# Choreography examples
+
+Use a choreography only when the description focuses on the message exchange protocol between participants (who sends what to whom, and in what order), not on the internal activities of any single party.
+
+Textual description:
+"A buyer submits an order to a seller. The seller confirms the order back to the buyer. The buyer then sends the payment to the seller."
+
+```json
+{
+    "participants": [
+        {"id": "buyer", "name": "Buyer"},
+        {"id": "seller", "name": "Seller"}
+    ],
+    "choreography": [
+        {"type": "startEvent", "id": "ch_start"},
+        {
+            "type": "choreographyTask",
+            "id": "ct_order",
+            "name": "Submit order",
+            "initiator": "buyer",
+            "recipient": "seller",
+            "message": "Order"
+        },
+        {
+            "type": "choreographyTask",
+            "id": "ct_confirm",
+            "name": "Confirm order",
+            "initiator": "seller",
+            "recipient": "buyer",
+            "message": "Confirmation"
+        },
+        {
+            "type": "choreographyTask",
+            "id": "ct_pay",
+            "name": "Send payment",
+            "initiator": "buyer",
+            "recipient": "seller",
+            "message": "Payment"
+        },
+        {"type": "endEvent", "id": "ch_end"}
+    ]
+}
+```
+
+Textual description:
+"A client requests a quote from a contractor. The contractor replies with a quote. If the client accepts, the client notifies the contractor of acceptance; otherwise the client declines."
+
+```json
+{
+    "participants": [
+        {"id": "client", "name": "Client"},
+        {"id": "contractor", "name": "Contractor"}
+    ],
+    "choreography": [
+        {"type": "startEvent", "id": "ch_start"},
+        {
+            "type": "choreographyTask",
+            "id": "ct_request",
+            "name": "Request quote",
+            "initiator": "client",
+            "recipient": "contractor",
+            "message": "Quote request"
+        },
+        {
+            "type": "choreographyTask",
+            "id": "ct_quote",
+            "name": "Send quote",
+            "initiator": "contractor",
+            "recipient": "client",
+            "message": "Quote"
+        },
+        {
+            "type": "exclusiveGateway",
+            "id": "ch_decide",
+            "label": "Quote accepted?",
+            "has_join": false,
+            "branches": [
+                {
+                    "condition": "Accepted",
+                    "path": [
+                        {
+                            "type": "choreographyTask",
+                            "id": "ct_accept",
+                            "name": "Accept quote",
+                            "initiator": "client",
+                            "recipient": "contractor",
+                            "message": "Acceptance"
+                        },
+                        {"type": "endEvent", "id": "ch_end_ok"}
+                    ]
+                },
+                {
+                    "condition": "Declined",
+                    "path": [
+                        {
+                            "type": "choreographyTask",
+                            "id": "ct_decline",
+                            "name": "Decline quote",
+                            "initiator": "client",
+                            "recipient": "contractor",
+                            "message": "Decline"
+                        },
+                        {"type": "endEvent", "id": "ch_end_no"}
+                    ]
+                }
+            ]
+        }
+    ]
+}
+```

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_1">
+  <process id="Process_1" isExecutable="false">
+    <startEvent id="start">
+      <outgoing>flow_start_taskEntry</outgoing>
+    </startEvent>
+    <sequenceFlow id="flow_start_taskEntry" sourceRef="start" targetRef="taskEntry" />
+    <task id="taskEntry" name="Work on task">
+      <incoming>flow_start_taskEntry</incoming>
+      <incoming>flow_repeat_entry</incoming>
+      <outgoing>flow_entry_inc</outgoing>
+    </task>
+    <sequenceFlow id="flow_entry_inc" sourceRef="taskEntry" targetRef="inc" />
+    <inclusiveGateway id="inc" name="How to proceed?" default="flow_inc_finish">
+      <incoming>flow_entry_inc</incoming>
+      <outgoing>flow_inc_repeat</outgoing>
+      <outgoing>flow_inc_finish</outgoing>
+    </inclusiveGateway>
+    <sequenceFlow id="flow_inc_repeat" name="Retry work" sourceRef="inc" targetRef="taskRepeat" />
+    <sequenceFlow id="flow_inc_finish" sourceRef="inc" targetRef="taskFinish" />
+    <task id="taskRepeat" name="Review work">
+      <incoming>flow_inc_repeat</incoming>
+      <outgoing>flow_repeat_entry</outgoing>
+    </task>
+    <sequenceFlow id="flow_repeat_entry" sourceRef="taskRepeat" targetRef="taskEntry" />
+    <task id="taskFinish" name="Finish up">
+      <incoming>flow_inc_finish</incoming>
+      <outgoing>flow_finish_end</outgoing>
+    </task>
+    <sequenceFlow id="flow_finish_end" sourceRef="taskFinish" targetRef="end" />
+    <endEvent id="end">
+      <incoming>flow_finish_end</incoming>
+    </endEvent>
+  </process>
+</definitions>

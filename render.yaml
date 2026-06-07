@@ -1,0 +1,40 @@
+services:
+  - name: bpmn-assistant-api
+    type: web
+    runtime: docker
+    repo: https://github.com/jtlicardo/bpmn-assistant
+    branch: main
+    dockerfilePath: src/bpmn_assistant/Dockerfile
+    plan: free
+    region: frankfurt
+    envVars:
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /
+
+  - name: bpmn-layout-server
+    type: web
+    runtime: docker
+    repo: https://github.com/jtlicardo/bpmn-assistant
+    branch: main
+    dockerfilePath: src/bpmn_layout_server/Dockerfile
+    plan: free
+    region: frankfurt
+    envVars:
+      - key: PORT
+        value: "10000"
+    healthCheckPath: /
+
+  - name: bpmn-frontend
+    type: web
+    runtime: static
+    repo: https://github.com/jtlicardo/bpmn-assistant
+    branch: main
+    rootDir: src/bpmn_frontend
+    buildCommand: npm ci && npm run build
+    staticPublishPath: dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://bpmn-assistant-api.onrender.com
+      - key: VITE_LAYOUT_BASE_URL
+        value: https://bpmn-layout-server.onrender.com

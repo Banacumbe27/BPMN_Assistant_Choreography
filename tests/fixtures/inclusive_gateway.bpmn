@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="definitions_1">
+  <process id="Process_1" isExecutable="false">
+    <startEvent id="start">
+      <outgoing>start-inc1</outgoing>
+    </startEvent>
+    <inclusiveGateway id="inc1" name="Which actions to perform?" default="inc1-taskDefault">
+      <incoming>start-inc1</incoming>
+      <outgoing>inc1-taskA</outgoing>
+      <outgoing>inc1-taskB</outgoing>
+      <outgoing>inc1-taskDefault</outgoing>
+    </inclusiveGateway>
+    <inclusiveGateway id="inc1-join">
+      <incoming>taskA-inc1-join</incoming>
+      <incoming>taskB-inc1-join</incoming>
+      <incoming>taskDefault-inc1-join</incoming>
+      <outgoing>inc1-join-end</outgoing>
+    </inclusiveGateway>
+    <task id="taskA" name="Perform Action A">
+      <incoming>inc1-taskA</incoming>
+      <outgoing>taskA-inc1-join</outgoing>
+    </task>
+    <task id="taskB" name="Perform Action B">
+      <incoming>inc1-taskB</incoming>
+      <outgoing>taskB-inc1-join</outgoing>
+    </task>
+    <task id="taskDefault" name="Perform Default Action">
+      <incoming>inc1-taskDefault</incoming>
+      <outgoing>taskDefault-inc1-join</outgoing>
+    </task>
+    <endEvent id="end">
+      <incoming>inc1-join-end</incoming>
+    </endEvent>
+    <sequenceFlow id="start-inc1" sourceRef="start" targetRef="inc1" />
+    <sequenceFlow id="taskA-inc1-join" sourceRef="taskA" targetRef="inc1-join" />
+    <sequenceFlow id="inc1-taskA" name="Condition A is true" sourceRef="inc1" targetRef="taskA" />
+    <sequenceFlow id="taskB-inc1-join" sourceRef="taskB" targetRef="inc1-join" />
+    <sequenceFlow id="inc1-taskB" name="Condition B is true" sourceRef="inc1" targetRef="taskB" />
+    <sequenceFlow id="taskDefault-inc1-join" sourceRef="taskDefault" targetRef="inc1-join" />
+    <sequenceFlow id="inc1-taskDefault" sourceRef="inc1" targetRef="taskDefault" />
+    <sequenceFlow id="inc1-join-end" sourceRef="inc1-join" targetRef="end" />
+  </process>
+</definitions>

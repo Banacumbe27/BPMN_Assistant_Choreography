@@ -1,0 +1,92 @@
+# Collaboration examples
+
+Use a collaboration (multiple pools + message flows) only when the description involves multiple independent participants exchanging messages. Otherwise, use a single `{"process": [...]}`.
+
+Textual description:
+"A customer places an order with a supplier. The supplier checks availability and sends a confirmation back to the customer."
+
+```json
+{
+    "participants": [
+        {
+            "id": "customer",
+            "name": "Customer",
+            "process": [
+                {"type": "startEvent", "id": "c_start"},
+                {"type": "sendTask", "id": "c_order", "label": "Place order"},
+                {"type": "receiveTask", "id": "c_recv", "label": "Receive confirmation"},
+                {"type": "endEvent", "id": "c_end"}
+            ]
+        },
+        {
+            "id": "supplier",
+            "name": "Supplier",
+            "process": [
+                {"type": "startEvent", "id": "s_start", "eventDefinition": "messageEventDefinition"},
+                {"type": "userTask", "id": "s_check", "label": "Check availability"},
+                {"type": "sendTask", "id": "s_confirm", "label": "Send confirmation"},
+                {"type": "endEvent", "id": "s_end"}
+            ]
+        }
+    ],
+    "message_flows": [
+        {"id": "mf1", "sourceRef": "c_order", "targetRef": "s_start", "label": "Order"},
+        {"id": "mf2", "sourceRef": "s_confirm", "targetRef": "c_recv", "label": "Confirmation"}
+    ]
+}
+```
+
+Textual description:
+"A job applicant submits an application to the HR department. HR reviews it; if accepted, HR sends an offer to the applicant, otherwise HR sends a rejection."
+
+```json
+{
+    "participants": [
+        {
+            "id": "applicant",
+            "name": "Applicant",
+            "process": [
+                {"type": "startEvent", "id": "a_start"},
+                {"type": "sendTask", "id": "a_submit", "label": "Submit application"},
+                {"type": "receiveTask", "id": "a_result", "label": "Receive decision"},
+                {"type": "endEvent", "id": "a_end"}
+            ]
+        },
+        {
+            "id": "hr",
+            "name": "HR Department",
+            "process": [
+                {"type": "startEvent", "id": "h_start", "eventDefinition": "messageEventDefinition"},
+                {"type": "userTask", "id": "h_review", "label": "Review application"},
+                {
+                    "type": "exclusiveGateway",
+                    "id": "h_decide",
+                    "label": "Application accepted?",
+                    "has_join": false,
+                    "branches": [
+                        {
+                            "condition": "Accepted",
+                            "path": [
+                                {"type": "sendTask", "id": "h_offer", "label": "Send offer"},
+                                {"type": "endEvent", "id": "h_end_ok"}
+                            ]
+                        },
+                        {
+                            "condition": "Rejected",
+                            "path": [
+                                {"type": "sendTask", "id": "h_reject", "label": "Send rejection"},
+                                {"type": "endEvent", "id": "h_end_no"}
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ],
+    "message_flows": [
+        {"id": "mf1", "sourceRef": "a_submit", "targetRef": "h_start", "label": "Application"},
+        {"id": "mf2", "sourceRef": "h_offer", "targetRef": "a_result", "label": "Offer"},
+        {"id": "mf3", "sourceRef": "h_reject", "targetRef": "a_result", "label": "Rejection"}
+    ]
+}
+```

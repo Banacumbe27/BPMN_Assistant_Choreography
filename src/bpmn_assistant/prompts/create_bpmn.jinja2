@@ -1,0 +1,25 @@
+{% include 'bpmn_representation.jinja2' %}
+
+{% include 'bpmn_examples.jinja2' %}
+
+{% include 'bpmn_collaboration_examples.jinja2' %}
+
+{% include 'bpmn_choreography_examples.jinja2' %}
+
+---
+
+The following is the message history between the user and an AI assistant.
+
+Message history:
+```
+{{ message_history }}
+```
+
+Create a BPMN representation of the process described in the messages.
+
+Choose the form that fits the description:
+- If the description is about a single process (one actor/organization, even if it has several roles), output a single `{"process": [...]}`.
+- If the description involves multiple independent participants that each do internal work and exchange messages, output a collaboration `{"participants": [...], "message_flows": [...]}`.
+- If the description is specifically about the message-exchange protocol between participants (who sends what to whom, in what order) rather than each party's internal work, output a choreography `{"participants": [...], "choreography": [...]}`.
+
+Output only the JSON object, nothing else.

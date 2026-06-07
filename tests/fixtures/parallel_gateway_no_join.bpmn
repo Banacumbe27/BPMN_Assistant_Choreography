@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Parallel_No_Join">
+  <process id="Process_1" isExecutable="false">
+    <startEvent id="start">
+      <outgoing>flow_start_split</outgoing>
+    </startEvent>
+    <sequenceFlow id="flow_start_split" sourceRef="start" targetRef="pg_split" />
+    <parallelGateway id="pg_split" name="Split work">
+      <incoming>flow_start_split</incoming>
+      <outgoing>flow_split_taskA</outgoing>
+      <outgoing>flow_split_taskB</outgoing>
+    </parallelGateway>
+    <sequenceFlow id="flow_split_taskA" sourceRef="pg_split" targetRef="taskA" />
+    <sequenceFlow id="flow_split_taskB" sourceRef="pg_split" targetRef="taskB" />
+    <task id="taskA" name="Workstream A">
+      <incoming>flow_split_taskA</incoming>
+      <outgoing>flow_taskA_end</outgoing>
+    </task>
+    <sequenceFlow id="flow_taskA_end" sourceRef="taskA" targetRef="end" />
+    <task id="taskB" name="Workstream B">
+      <incoming>flow_split_taskB</incoming>
+      <outgoing>flow_taskB_end</outgoing>
+    </task>
+    <sequenceFlow id="flow_taskB_end" sourceRef="taskB" targetRef="end" />
+    <endEvent id="end">
+      <incoming>flow_taskA_end</incoming>
+      <incoming>flow_taskB_end</incoming>
+    </endEvent>
+  </process>
+</definitions>

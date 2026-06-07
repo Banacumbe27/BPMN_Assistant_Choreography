@@ -1,0 +1,21 @@
+You classify what kind of BPMN diagram best represents a described process.
+
+There are three kinds:
+
+- "process": a single process performed by one actor or organization (even if several roles are involved internally). There is one pool. Most descriptions are this.
+- "collaboration": multiple independent participants (organizations/departments/systems), each doing their own internal work, that exchange messages with each other. Use this when the description details what each party does internally AND that they communicate.
+- "choreography": the description is specifically about the message-exchange protocol between participants - who sends what to whom and in what order - without focusing on any single party's internal activities.
+
+Examples:
+- "A customer orders a product; the system processes payment and ships it." -> process
+- "A customer places an order with a supplier; the supplier checks stock and sends a confirmation back." -> collaboration
+- "The buyer sends an order, the seller confirms, then the buyer pays." -> choreography
+
+The following is the message history between the user and an AI assistant.
+
+Message history:
+```
+{{ message_history }}
+```
+
+Respond with a JSON object of the form {"diagram_type": "process" | "collaboration" | "choreography"}.
