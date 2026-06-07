@@ -210,13 +210,13 @@ def validate_element(element: dict, mode: str = "process") -> None:
         _validate_task(element)
 
     elif element["type"] == BPMNElementType.EXCLUSIVE_GATEWAY.value:
-        _validate_exclusive_gateway(element)
+        _validate_exclusive_gateway(element, mode=mode)
 
     elif element["type"] == BPMNElementType.INCLUSIVE_GATEWAY.value:
-        _validate_inclusive_gateway(element)
+        _validate_inclusive_gateway(element, mode=mode)
 
     elif element["type"] == BPMNElementType.PARALLEL_GATEWAY.value:
-        _validate_parallel_gateway(element)
+        _validate_parallel_gateway(element, mode=mode)
 
 
 def _validate_choreography_task(element: dict) -> None:
@@ -235,7 +235,7 @@ def _validate_task(element: dict) -> None:
         raise ValueError(f"Invalid task element: {element}")
 
 
-def _validate_exclusive_gateway(element: dict) -> None:
+def _validate_exclusive_gateway(element: dict, mode: str = "process") -> None:
     if "label" not in element:
         raise ValueError(f"Exclusive gateway is missing a label: {element}")
     if "branches" not in element or not isinstance(element["branches"], list):
@@ -255,13 +255,18 @@ def _validate_exclusive_gateway(element: dict) -> None:
             "Exclusive gateway must have at least one branch with elements; all branch paths are empty."
         )
 
+    # The Pydantic BPMNElement union doesn't include choreographyTask, so the
+    # strict whole-tree check is skipped in choreography mode (branch contents
+    # are still validated recursively by validate_bpmn(mode="choreography")).
+    if mode == "choreography":
+        return
     try:
         ExclusiveGateway.model_validate(element)
     except ValidationError:
         raise ValueError(f"Invalid exclusive gateway element: {element}")
 
 
-def _validate_inclusive_gateway(element: dict) -> None:
+def _validate_inclusive_gateway(element: dict, mode: str = "process") -> None:
     if "label" not in element:
         raise ValueError(f"Inclusive gateway is missing a label: {element}")
     if "branches" not in element or not isinstance(element["branches"], list):
@@ -276,18 +281,22 @@ def _validate_inclusive_gateway(element: dict) -> None:
         if not branch.get("is_default", False) and "condition" not in branch:
             raise ValueError(f"Invalid branch in inclusive gateway (non-default branch missing 'condition'): {branch}")
 
+    if mode == "choreography":
+        return
     try:
         InclusiveGateway.model_validate(element)
     except ValidationError:
         raise ValueError(f"Invalid inclusive gateway element: {element}")
 
 
-def _validate_parallel_gateway(element: dict) -> None:
+def _validate_parallel_gateway(element: dict, mode: str = "process") -> None:
     if "branches" not in element or not isinstance(element["branches"], list):
         raise ValueError(
             f"Parallel gateway has missing or invalid 'branches': {element}"
         )
 
+    if mode == "choreography":
+        return
     try:
         ParallelGateway.model_validate(element)
     except ValidationError:
