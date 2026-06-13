@@ -1,35 +1,11 @@
-<template>
-  <div style="display: flex; flex-direction: row; height: 100vh">
-    <div class="chat-container">
-      <ChatInterface
-        @bpmn-xml-received="handleBpmnXml"
-        @bpmn-json-received="setBpmnJson"
-        @download="downloadBpmnFile"
-        :isDownloadReady="!!bpmnXml"
-        :process="process"
-      />
-    </div>
-    <div
-      id="canvas"
-      class="canvas-container"
-      @dragover.prevent
-      @drop="handleDrop"
-    ></div>
-    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000">
-      {{ snackbar.text }}
-    </v-snackbar>
-  </div>
-</template>
-
 <script>
-import BpmnModeler from 'bpmn-js/lib/Modeler';
 import ChatInterface from '../components/ChatInterface.vue';
 import { bpmnAssistantUrl, bpmnLayoutServerUrl } from '../config';
 import { getApiKeys } from '../utils/apiKeys';
-// import initialDiagram from "../assets/initialDiagram.js";
-import 'bpmn-js/dist/assets/diagram-js.css';
-import 'bpmn-js/dist/assets/bpmn-js.css';
-import 'bpmn-js/dist/assets/bpmn-font/css/bpmn-embedded.css';
+import sampleBpmn from '../assets/jadeHotelVip.bpmn?raw';
+import { markRaw } from 'vue';
+
+const Modeler = window.ChorJSModeler || window.ChorJS;
 
 export default {
   name: 'App',
@@ -48,21 +24,17 @@ export default {
       },
     };
   },
-  mounted() {
-    this.bpmnViewer = new BpmnModeler({
-      container: '#canvas',
-    });
+  async mounted() {
+    this.bpmnViewer = markRaw(
+      new Modeler({
+        container: this.$refs.canvas,
+        keyboard: {
+          bindTo: document,
+        },
+      }),
+    );
 
-    // this.bpmnViewer
-    //   .importXML(initialDiagram)
-    //   .then((result) => {
-    //     const { warnings } = result;
-    //     console.log("BPMN diagram imported successfully", warnings);
-    //     this.bpmnViewer.get("canvas").zoom("fit-viewport");
-    //   })
-    //   .catch((err) => {
-    //     console.error("Failed to import BPMN diagram:", err);
-    //   });
+    await this.loadSampleDiagram();
   },
   beforeUnmount() {
     if (this.bpmnViewer) {
@@ -74,6 +46,20 @@ export default {
       this.snackbar.text = text;
       this.snackbar.color = color;
       this.snackbar.show = true;
+    },
+    async loadSampleDiagram() {
+      this.bpmnXml = sampleBpmn;
+      await this.importDiagram(sampleBpmn);
+    },
+    async importDiagram(xmlContent) {
+      if (!this.bpmnViewer) {
+        return;
+      }
+      console.log('Importing BPMN diagram...', xmlContent);
+      const result = await this.bpmnViewer.importXML(xmlContent.toString());
+      const { warnings } = result;
+      console.log('BPMN diagram imported successfully', warnings);
+      this.bpmnViewer.get('canvas').zoom('fit-viewport');
     },
     async handleDrop(event) {
       event.preventDefault(); // Prevent the browser from default file handling
@@ -87,9 +73,7 @@ export default {
               reader.onload = async (e) => {
                 const xmlContent = e.target.result;
                 try {
-                  await this.bpmnViewer.importXML(xmlContent);
-                  this.bpmnViewer.get('canvas').zoom('fit-viewport');
-                  console.log('BPMN diagram loaded successfully');
+                  await this.importDiagram(xmlContent);
                   this.bpmnXml = xmlContent;
                   await this.createBpmnJson();
                 } catch (err) {
@@ -122,19 +106,13 @@ export default {
         console.error('Error creating BPMN JSON:', error);
         this.showSnackbar(
           'There was a problem while loading the BPMN file',
-          'error'
+          'error',
         );
       }
     },
     async handleBpmnXml(bpmnXmlValue) {
       if (bpmnXmlValue === '') {
-        if (this.bpmnViewer) {
-          this.bpmnViewer.destroy();
-        }
-
-        this.bpmnViewer = new BpmnModeler({
-          container: '#canvas',
-        });
+        await this.loadSampleDiagram();
         return;
       }
 
@@ -150,18 +128,7 @@ export default {
           throw new Error('Failed to layout the BPMN diagram');
         }
         this.bpmnXml = layoutedXml;
-        if (this.bpmnViewer) {
-          this.bpmnViewer
-            .importXML(layoutedXml)
-            .then((result) => {
-              const { warnings } = result;
-              console.log('BPMN diagram imported successfully', warnings);
-              this.bpmnViewer.get('canvas').zoom('fit-viewport');
-            })
-            .catch((err) => {
-              console.error('Failed to import BPMN diagram:', err);
-            });
-        }
+        await this.importDiagram(layoutedXml);
       } catch (error) {
         console.error('Error handling BPMN XML:', error);
       }
@@ -204,6 +171,29 @@ export default {
   },
 };
 </script>
+
+<template>
+  <div style="display: flex; flex-direction: row; height: 100vh">
+    <div class="chat-container">
+      <ChatInterface
+        @bpmn-xml-received="handleBpmnXml"
+        @bpmn-json-received="setBpmnJson"
+        @download="downloadBpmnFile"
+        :isDownloadReady="!!bpmnXml"
+        :process="process"
+      />
+    </div>
+    <div
+      ref="canvas"
+      class="canvas-container"
+      @dragover.prevent
+      @drop="handleDrop"
+    ></div>
+    <v-snackbar v-model="snackbar.show" :color="snackbar.color" :timeout="3000">
+      {{ snackbar.text }}
+    </v-snackbar>
+  </div>
+</template>
 
 <style>
 #canvas {
