@@ -242,13 +242,97 @@ class TestLayoutDi:
         _, shapes, edges = _di_shapes_edges(buyer_seller_choreography)
         self._assert_bounds_valid(shapes)
         # choreography tasks get the tall (band) height
-        task = next(s for s in shapes if s.get("bpmnElement") == "ct_order")
+        task = next(
+            s
+            for s in shapes
+            if s.get("bpmnElement") == "ct_order" and not s.get("participantBandKind")
+        )
         assert float(task.find("{*}Bounds").get("height")) == 150
+
+    def test_choreography_band_di(self, buyer_seller_choreography):
+        """chor-js needs 2 participant-band shapes per task (regression)."""
+        _, shapes, _ = _di_shapes_edges(buyer_seller_choreography)
+        bands = [s for s in shapes if s.get("participantBandKind")]
+        # 2 tasks x 2 bands
+        assert len(bands) == 4
+        for b in bands:
+            assert b.get("choreographyActivityShape", "").endswith("_di")
+            assert b.get("isMessageVisible") == "false"
+            assert float(b.find("{*}Bounds").get("height")) == 20
+        # ct_order: buyer initiates -> top, seller -> bottom
+        order_bands = {
+            b.get("participantBandKind"): b.get("bpmnElement")
+            for b in bands
+            if b.get("choreographyActivityShape") == "ct_order_di"
+        }
+        assert order_bands == {"top_initiating": "buyer", "bottom_non_initiating": "seller"}
+
 
     def test_single_process_di(self, linear_process):
         root, shapes, edges = _di_shapes_edges(linear_process)
         self._assert_bounds_valid(shapes)
         assert root.find("{*}BPMNDiagram").find("{*}BPMNPlane").get("bpmnElement") == "Process_1"
+
+
+class TestChoreographyMessageFlows:
+    def test_message_flows_declared_and_resolve(self, buyer_seller_choreography):
+        xml = BpmnXmlGenerator().create_bpmn_xml(buyer_seller_choreography)
+        root = ET.fromstring(xml)
+        choreo = root.find("{*}choreography")
+
+        message_flows = {mf.get("id"): mf for mf in choreo.findall("{*}messageFlow")}
+        assert message_flows  # not empty
+
+        # every messageFlowRef on a task resolves to a declared <messageFlow>
+        refs = [
+            r.text
+            for t in choreo.findall("{*}choreographyTask")
+            for r in t.findall("{*}messageFlowRef")
+        ]
+        assert refs
+        assert all(r in message_flows for r in refs)
+
+        # messageFlow source/target are participant ids; messageRef resolves to a <message>
+        messages = {m.get("id") for m in root.findall("{*}message")}
+        participant_ids = {p["id"] for p in buyer_seller_choreography["participants"]}
+        for mf in message_flows.values():
+            assert mf.get("sourceRef") in participant_ids
+            assert mf.get("targetRef") in participant_ids
+            assert mf.get("messageRef") in messages
+
+
+class _FakeFacade:
+    """Minimal stand-in for LLMFacade that records the prompt and returns a fixed model."""
+
+    def __init__(self, response):
+        self.response = response
+        self.last_prompt = None
+
+    def call(self, prompt, max_tokens=3000, images=None):
+        self.last_prompt = prompt
+        return self.response
+
+
+class TestChoreographyPromptRouting:
+    def test_choreography_uses_dedicated_prompt(self, buyer_seller_choreography):
+        from bpmn_assistant.services.bpmn_modeling_service import BpmnModelingService
+
+        facade = _FakeFacade(buyer_seller_choreography)
+        model = BpmnModelingService().create_bpmn(facade, [], diagram_type="choreography")
+
+        assert "choreography" in model  # valid dict returned
+        # dedicated choreography prompt, not the process/collaboration one
+        assert "Create a BPMN **choreography**" in facade.last_prompt
+        assert "Collaboration examples" not in facade.last_prompt
+
+    def test_process_uses_default_prompt(self, linear_process):
+        from bpmn_assistant.services.bpmn_modeling_service import BpmnModelingService
+
+        facade = _FakeFacade({"process": linear_process})
+        model = BpmnModelingService().create_bpmn(facade, [], diagram_type="process")
+
+        assert model == linear_process  # legacy list unwrapped
+        assert "Create a BPMN representation" in facade.last_prompt
 
 
 class TestCollaborationEditing:

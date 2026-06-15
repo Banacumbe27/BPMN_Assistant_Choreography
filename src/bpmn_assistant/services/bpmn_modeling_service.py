@@ -28,6 +28,7 @@ class BpmnModelingService:
         message_history: list[MessageItem],
         images: list[MessageImage] | None = None,
         max_retries: int = 3,
+        diagram_type: str | None = None,
     ) -> list | dict:
         """
         Create a BPMN model from the description.
@@ -36,13 +37,22 @@ class BpmnModelingService:
             message_history: The message history.
             images: Optional list of images to attach to the request.
             max_retries: The maximum number of retries in case of failure.
+            diagram_type: Optional pre-classified type ("process",
+                "collaboration", "choreography"). "choreography" uses the
+                dedicated choreography prompt; otherwise the create prompt
+                self-selects process vs collaboration.
         Returns:
             The BPMN model: a process list (legacy single pool) or a
             collaboration/choreography dict.
         """
 
+        template = (
+            "create_choreography.jinja2"
+            if diagram_type == "choreography"
+            else "create_bpmn.jinja2"
+        )
         prompt = self.prompt_processor.render_template(
-            "create_bpmn.jinja2",
+            template,
             message_history=message_history_to_string(message_history),
         )
 

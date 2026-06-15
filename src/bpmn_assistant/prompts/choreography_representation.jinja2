@@ -1,0 +1,74 @@
+A BPMN **choreography** describes the ordered exchange of messages between participants from a neutral, global viewpoint. There is no single controlling process - the diagram captures *who sends what to whom, and in what order*.
+
+The model is a JSON object with two keys:
+
+```json
+{
+    "participants": [ { "id": String, "name": String } ],
+    "choreography": [ /* ordered array of elements (see below) */ ]
+}
+```
+
+Elements in the `choreography` array execute in order based on their position, unless gateways specify branching. The array must contain exactly one start event and at least one end event.
+
+# Components
+
+## Choreography task
+
+The core element: one atomic interaction in which an **initiator** participant sends a message to a **recipient** participant. Visually it is a rounded rectangle with two participant bands - the initiator band on **top** (white), the recipient band on the **bottom** (grey) - and an **envelope** for the message.
+
+- Keep each task atomic: one message exchange. Break complex interactions into multiple tasks.
+- `name` is the interaction label (2-4 words, e.g. "Send order").
+- `initiator` and `recipient` must be ids of declared participants.
+- `message` is the message being sent (optional but recommended; shown as an envelope).
+- `return_message` (optional) makes the interaction two-way (a reply on the same task).
+
+```json
+{
+    "type": "choreographyTask",
+    "id": String,
+    "name": String,           // label of the interaction
+    "initiator": String,      // participant id that sends the message (top band)
+    "recipient": String,      // participant id that receives the message (bottom band)
+    "message": String,        // OPTIONAL: the message sent
+    "return_message": String  // OPTIONAL: a reply message (two-way interaction)
+}
+```
+
+## Events
+
+- `startEvent` - where the choreography begins (thin circle). Exactly one.
+- `endEvent` - where it finishes (thick circle). At least one. Include an explicit end event in a branch when that path terminates.
+- `intermediateThrowEvent` / `intermediateCatchEvent` - an event during the flow (double circle), e.g. a timer or message wait. Optional `eventDefinition`: `timerEventDefinition` or `messageEventDefinition`.
+
+```json
+{ "type": "startEvent" | "endEvent" | "intermediateThrowEvent" | "intermediateCatchEvent", "id": String, "label": String /* OPTIONAL */, "eventDefinition": String /* OPTIONAL */ }
+```
+
+## Gateways
+
+Diamonds controlling sequence flow between interactions. Same grammar as orchestration: branches are **nested inline** inside the gateway.
+
+- `exclusiveGateway` (X) - exactly one branch taken based on a condition.
+- `parallelGateway` (+) - all branches taken concurrently.
+- `inclusiveGateway` (O) - one or more branches taken based on conditions.
+
+For exclusive/inclusive, each branch has a `condition` and a `path` (array of elements). If a branch loops back to an earlier element, set `next` to that element's id. To end the choreography on a branch, put an `endEvent` in its `path`.
+
+```json
+{
+    "type": "exclusiveGateway",
+    "id": String,
+    "label": String,
+    "has_join": Boolean,
+    "branches": [
+        { "condition": String, "path": [ /* elements */ ], "next": String /* OPTIONAL */ }
+    ]
+}
+```
+
+Parallel gateway uses `"branches": [ [ /* elements */ ], [ /* elements */ ] ]` (array of arrays); the converging gateway is generated automatically.
+
+## Sequence flow
+
+The solid arrows between elements are derived automatically from array order, gateway branches, and `next` - you do **not** specify sequence flows explicitly.

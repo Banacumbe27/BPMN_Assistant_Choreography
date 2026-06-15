@@ -18,6 +18,7 @@ from bpmn_assistant.services import (
     BpmnModelingService,
     BpmnXmlGenerator,
     ConversationalService,
+    determine_diagram_type,
     determine_intent,
 )
 from bpmn_assistant.utils import (
@@ -112,10 +113,18 @@ async def _modify(request: ModifyBpmnRequest) -> JSONResponse:
             images=images,
         )
     else:
+        # Classify the diagram type on a separate facade so the create facade's
+        # message history stays clean. Choreography routes to a dedicated prompt;
+        # process vs collaboration is self-selected by the create prompt.
+        classifier_facade = get_llm_facade(request.model, api_keys=request.api_keys)
+        diagram_type = determine_diagram_type(
+            classifier_facade, request.message_history, images=images
+        )["diagram_type"]
         process = bpmn_modeling_service.create_bpmn(
             llm_facade,
             request.message_history,
             images=images,
+            diagram_type=diagram_type,
         )
 
     bpmn_xml_string = bpmn_xml_generator.create_bpmn_xml(process)

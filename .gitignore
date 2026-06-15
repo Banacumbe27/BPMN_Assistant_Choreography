@@ -194,3 +194,5 @@ scratch.py
 *.ps1
 .claude
 .DS_Store
+chor-js
+src/bpmn_assistant/.env

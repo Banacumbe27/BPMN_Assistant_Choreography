@@ -138,6 +138,27 @@ class BpmnXmlGenerator:
             p_elem.set("id", participant["id"])
             p_elem.set("name", participant["name"])
 
+        # Message flows (one per task message). Declared here so the
+        # <messageFlowRef> on each choreographyTask resolves. sourceRef/targetRef
+        # are participant ids (the bands), not element ids.
+        for tid, meta in task_meta.items():
+            if meta.get("message"):
+                self._append_message_flow(
+                    choreography_elem,
+                    f"MessageFlow_{tid}",
+                    meta["initiator"],
+                    meta["recipient"],
+                    f"Message_{tid}",
+                )
+            if meta.get("return_message"):
+                self._append_message_flow(
+                    choreography_elem,
+                    f"MessageFlow_{tid}_return",
+                    meta["recipient"],
+                    meta["initiator"],
+                    f"Message_{tid}_return",
+                )
+
         transformed = self.transformer.transform(choreography)
         logger.debug(
             f"Transformed choreography:\n{json.dumps(transformed, indent=2)}"
@@ -232,6 +253,22 @@ class BpmnXmlGenerator:
             ).text = f"MessageFlow_{element['id']}_return"
 
         return elem
+
+    def _append_message_flow(
+        self,
+        parent: ET.Element,
+        flow_id: str,
+        source_ref: str,
+        target_ref: str,
+        message_ref: str,
+    ) -> ET.Element:
+        """Append a choreography-level <messageFlow> (participant -> participant)."""
+        mf = ET.SubElement(parent, "messageFlow")
+        mf.set("id", flow_id)
+        mf.set("sourceRef", source_ref)
+        mf.set("targetRef", target_ref)
+        mf.set("messageRef", message_ref)
+        return mf
 
     def _append_flows(self, parent: ET.Element, flows: list[dict]) -> None:
         for flow in flows:

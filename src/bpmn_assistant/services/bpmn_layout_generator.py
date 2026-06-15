@@ -19,6 +19,7 @@ EVENT_SIZE = 36
 GATEWAY_SIZE = 50
 TASK_W, TASK_H = 100, 80
 CHOREO_W, CHOREO_H = 100, 150
+BAND_HEIGHT = 20  # chor-js participant band strip height (BandUtil.js)
 
 # Spacing
 H_SPACING = 150  # horizontal distance between layers (columns)
@@ -137,9 +138,55 @@ class BpmnLayoutGenerator:
     # --- choreography ---
 
     def _choreography_di(self, model: dict) -> str:
-        transformed = self.transformer.transform(model["choreography"])
-        shapes, edges, _ = self._layout(transformed, origin=(MARGIN, MARGIN))
+        choreography = model["choreography"]
+        transformed = self.transformer.transform(choreography)
+        shapes, edges, boxes = self._layout(transformed, origin=(MARGIN, MARGIN))
+
+        # Per choreographyTask, add the two participant-band shapes chor-js needs
+        # to draw the top/bottom strips (initiator on top, recipient on bottom).
+        task_meta = {
+            el["id"]: el
+            for el in self._iter_elements(choreography)
+            if el.get("type") == "choreographyTask"
+        }
+        for tid, meta in task_meta.items():
+            if tid not in boxes:
+                continue
+            x, y, w, h = boxes[tid]
+            shapes.append(
+                self._band_shape(tid, meta["initiator"], "top_initiating", x, y, w)
+            )
+            shapes.append(
+                self._band_shape(
+                    tid, meta["recipient"], "bottom_non_initiating", x, y + h - BAND_HEIGHT, w
+                )
+            )
+
         return self._render_diagram("Choreography_1", shapes, edges)
+
+    def _iter_elements(self, process: list[dict]) -> list[dict]:
+        """Recursively yield every element in a (possibly branched) process list."""
+        result: list[dict] = []
+        for element in process:
+            result.append(element)
+            if "branches" in element:
+                for branch in element["branches"]:
+                    path = branch.get("path", branch) if isinstance(branch, dict) else branch
+                    result.extend(self._iter_elements(path))
+        return result
+
+    def _band_shape(
+        self, task_id: str, participant_id: str, band_kind: str, x: float, y: float, w: float
+    ) -> str:
+        """A participant band BPMNShape attached to a choreography activity shape."""
+        return (
+            f'<bpmndi:BPMNShape id="{task_id}_di_band_{participant_id}" '
+            f'bpmnElement="{participant_id}" isMessageVisible="false" '
+            f'participantBandKind="{band_kind}" '
+            f'choreographyActivityShape="{task_id}_di">'
+            f'<dc:Bounds x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(BAND_HEIGHT)}" />'
+            f"</bpmndi:BPMNShape>"
+        )
 
     # --- core layout ---
 

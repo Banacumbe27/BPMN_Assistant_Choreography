@@ -1,0 +1,21 @@
+{% include 'choreography_representation.jinja2' %}
+
+{% include 'bpmn_choreography_examples.jinja2' %}
+
+---
+
+The following is the message history between the user and an AI assistant.
+
+Message history:
+```
+{{ message_history }}
+```
+
+Create a BPMN **choreography** representation of the interaction described in the messages.
+
+- Model the messages exchanged between the participants, in order.
+- Each interaction is a `choreographyTask` with an `initiator`, a `recipient`, and the `message` sent.
+- Declare every participant in `participants`.
+- Use gateways for branching ("if ... otherwise ...") and `next` for loops ("repeat until ...").
+
+Output only the JSON object `{"participants": [...], "choreography": [...]}`, nothing else.
