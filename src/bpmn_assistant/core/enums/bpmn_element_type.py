@@ -2,14 +2,9 @@ from enum import Enum
 
 
 class BPMNElementType(Enum):
-    TASK = "task"
-    USER_TASK = "userTask"
-    SERVICE_TASK = "serviceTask"
-    SEND_TASK = "sendTask"
-    RECEIVE_TASK = "receiveTask"
-    BUSINESS_RULE_TASK = "businessRuleTask"
-    MANUAL_TASK = "manualTask"
-    SCRIPT_TASK = "scriptTask"
+    """Element types supported in a BPMN choreography."""
+
+    CHOREOGRAPHY_TASK = "choreographyTask"
     EXCLUSIVE_GATEWAY = "exclusiveGateway"
     INCLUSIVE_GATEWAY = "inclusiveGateway"
     PARALLEL_GATEWAY = "parallelGateway"
@@ -23,4 +18,6 @@ class EventDefinitionType(Enum):
     """Event definition types for BPMN events"""
     TIMER = "timerEventDefinition"
     MESSAGE = "messageEventDefinition"
+    CONDITIONAL = "conditionalEventDefinition"
+    TERMINATE = "terminateEventDefinition"
     NONE = None  # For events without definitions

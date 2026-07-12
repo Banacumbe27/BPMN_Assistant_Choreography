@@ -94,7 +94,7 @@
       <div v-if="messages.length === 0">
         <MessageCard
           role="assistant"
-          content="Welcome to BPMN Assistant! I can help you understand and create BPMN processes. Let's start by discussing your BPMN needs or creating a new process from scratch. How would you like to begin?"
+          content="Welcome to BPMN Assistant! I can help you turn contract descriptions into BPMN choreography diagrams. Describe the interactions or deontic clauses (obligations, permissions, prohibitions, compensations) between the parties, and I will visualize them. How would you like to begin?"
         />
       </div>
 
@@ -647,7 +647,7 @@ export default {
         if (!response.ok) {
           console.error(`HTTP error! Status: ${response.status}`);
           this.isLoading = false;
-          await this.handleErrorResponse(response, 'Unable to modify the BPMN process.');
+          await this.handleErrorResponse(response, 'Unable to modify the BPMN choreography.');
           return;
         }
 

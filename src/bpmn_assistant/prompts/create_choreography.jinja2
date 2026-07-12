@@ -11,11 +11,22 @@ Message history:
 {{ message_history }}
 ```
 
-Create a BPMN **choreography** representation of the interaction described in the messages.
+{% if current_model %}
+The current BPMN choreography shown to the user:
 
-- Model the messages exchanged between the participants, in order.
-- Each interaction is a `choreographyTask` with an `initiator`, a `recipient`, and the `message` sent.
-- Declare every participant in `participants`.
-- Use gateways for branching ("if ... otherwise ...") and `next` for loops ("repeat until ...").
+```json
+{{ current_model }}
+```
+
+Apply the change requested in the last user message to this choreography and output the **complete updated** choreography JSON. Keep every element that the user did not ask to change (ids, labels, structure) exactly as it is.
+{% else %}
+Create a BPMN **choreography** representation of the contract or interaction described in the messages.
+
+- If the description is deontic (obligations, permissions, prohibitions, compensations), apply the deontic mapping patterns above.
+- Model the interactions between the participants, in order. Each interaction is a `choreographyTask` with an `initiator`, a `recipient`, and optionally the `message` sent.
+- Declare every participant in `participants` (at least two).
+- Use exclusive gateways for branching and label every branch condition (e.g. "yes" / "no"), including branches that lead to end events.
+- Use a conditional start event when the choreography is triggered by a condition; use terminate end events for successfully fulfilled outcomes and a plain end event for the unfulfilled/uncompensated outcome.
+{% endif %}
 
 Output only the JSON object `{"participants": [...], "choreography": [...]}`, nothing else.

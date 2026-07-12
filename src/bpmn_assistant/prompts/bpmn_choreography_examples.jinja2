@@ -1,106 +1,217 @@
 # Choreography examples
 
-Use a choreography only when the description focuses on the message exchange protocol between participants (who sends what to whom, and in what order), not on the internal activities of any single party.
+## Example 1: deontic contract with compensation chain
 
 Textual description:
-"A buyer submits an order to a seller. The seller confirms the order back to the buyer. The buyer then sends the payment to the seller."
+"Jade Hotel will provide a room with a balcony and a view of the sea. If the hotel cannot arrange a sea view room as promised, it shall arrange an alternative room with a luxurious interior design, or a king-size double bed. If this compensation option is unavailable, Jade Hotel will offer two adult members of the tourist family free access to the hotel's spa during their stay. If neither of these compensations could be made, the tourist is entitled to a 50% discount on her accommodation at Jade Hotel upon checkout."
+
+Reasoning: the contract only becomes active when the promised sea view room cannot be provided - that is the trigger condition (conditional start event). Then three compensations are chained ("failing which"): alternative room ⊛ free spa access ⊛ 50% discount. Each fulfilled compensation terminates the contract successfully (terminate end event); if even the last chance fails, the contract ends unfulfilled (plain end event).
 
 ```json
 {
     "participants": [
-        {"id": "buyer", "name": "Buyer"},
-        {"id": "seller", "name": "Seller"}
+        {"id": "jade_hotel", "name": "Jade Hotel"},
+        {"id": "customer", "name": "Customer"}
     ],
     "choreography": [
-        {"type": "startEvent", "id": "ch_start"},
         {
-            "type": "choreographyTask",
-            "id": "ct_order",
-            "name": "Submit order",
-            "initiator": "buyer",
-            "recipient": "seller",
-            "message": "Order"
+            "type": "startEvent",
+            "id": "start_no_seaview",
+            "label": "Hotel has no seaview room for customer booking the deluxe room",
+            "eventDefinition": "conditionalEventDefinition"
         },
         {
             "type": "choreographyTask",
-            "id": "ct_confirm",
-            "name": "Confirm order",
-            "initiator": "seller",
-            "recipient": "buyer",
-            "message": "Confirmation"
+            "id": "provide_alt_room",
+            "name": "Provide Alternative room",
+            "initiator": "jade_hotel",
+            "recipient": "customer",
+            "message": "Alternative room offer"
+        },
+        {
+            "type": "exclusiveGateway",
+            "id": "gw_alt_room",
+            "label": "Does alternative room available?",
+            "has_join": false,
+            "branches": [
+                {
+                    "condition": "yes",
+                    "path": [
+                        {
+                            "type": "endEvent",
+                            "id": "end_fulfilled_room",
+                            "label": "Contract fulfilled",
+                            "eventDefinition": "terminateEventDefinition"
+                        }
+                    ]
+                },
+                {"condition": "no", "path": []}
+            ]
         },
         {
             "type": "choreographyTask",
-            "id": "ct_pay",
-            "name": "Send payment",
-            "initiator": "buyer",
-            "recipient": "seller",
-            "message": "Payment"
+            "id": "provide_spa_access",
+            "name": "Provide free spa access",
+            "initiator": "jade_hotel",
+            "recipient": "customer",
+            "message": "Free spa access offer"
         },
-        {"type": "endEvent", "id": "ch_end"}
+        {
+            "type": "exclusiveGateway",
+            "id": "gw_spa_access",
+            "label": "Does free spa access available?",
+            "has_join": false,
+            "branches": [
+                {
+                    "condition": "yes",
+                    "path": [
+                        {
+                            "type": "endEvent",
+                            "id": "end_fulfilled_spa",
+                            "label": "Contract fulfilled",
+                            "eventDefinition": "terminateEventDefinition"
+                        }
+                    ]
+                },
+                {"condition": "no", "path": []}
+            ]
+        },
+        {
+            "type": "choreographyTask",
+            "id": "provide_discount",
+            "name": "Provide 50% discount on checkout",
+            "initiator": "jade_hotel",
+            "recipient": "customer",
+            "message": "50% discount offer"
+        },
+        {
+            "type": "exclusiveGateway",
+            "id": "gw_discount",
+            "label": "Does the discount available?",
+            "has_join": false,
+            "branches": [
+                {
+                    "condition": "yes",
+                    "path": [
+                        {
+                            "type": "endEvent",
+                            "id": "end_fulfilled_discount",
+                            "label": "Contract fulfilled",
+                            "eventDefinition": "terminateEventDefinition"
+                        }
+                    ]
+                },
+                {
+                    "condition": "no",
+                    "path": [
+                        {
+                            "type": "endEvent",
+                            "id": "end_unfulfilled",
+                            "label": "Contract unfulfilled, customer is uncompensated"
+                        }
+                    ]
+                }
+            ]
+        }
     ]
 }
 ```
 
+Note how the empty `"no"` branches simply continue with the next element in the array (the next compensation task), and how **every** branch condition is labelled, including the "yes" branches into the terminate end events.
+
+## Example 2: permission and prohibition
+
 Textual description:
-"A client requests a quote from a contractor. The contractor replies with a quote. If the client accepts, the client notifies the contractor of acceptance; otherwise the client declines."
+"When a booking is confirmed, the guest is permitted to request an early check-in. The hotel must not charge the guest before arrival; if the hotel refrains from charging, the contract is fulfilled. If it does charge early, it is obligated to refund the guest, otherwise the guest is uncompensated."
 
 ```json
 {
     "participants": [
-        {"id": "client", "name": "Client"},
-        {"id": "contractor", "name": "Contractor"}
+        {"id": "hotel", "name": "Hotel"},
+        {"id": "guest", "name": "Guest"}
     ],
     "choreography": [
-        {"type": "startEvent", "id": "ch_start"},
         {
-            "type": "choreographyTask",
-            "id": "ct_request",
-            "name": "Request quote",
-            "initiator": "client",
-            "recipient": "contractor",
-            "message": "Quote request"
-        },
-        {
-            "type": "choreographyTask",
-            "id": "ct_quote",
-            "name": "Send quote",
-            "initiator": "contractor",
-            "recipient": "client",
-            "message": "Quote"
+            "type": "startEvent",
+            "id": "start_confirmed",
+            "label": "Booking is confirmed",
+            "eventDefinition": "conditionalEventDefinition"
         },
         {
             "type": "exclusiveGateway",
-            "id": "ch_decide",
-            "label": "Quote accepted?",
+            "id": "gw_early_checkin",
+            "label": "Early check-in requested?",
+            "has_join": true,
+            "branches": [
+                {
+                    "condition": "yes",
+                    "path": [
+                        {
+                            "type": "choreographyTask",
+                            "id": "request_early_checkin",
+                            "name": "Request early check-in",
+                            "initiator": "guest",
+                            "recipient": "hotel",
+                            "message": "Early check-in request"
+                        }
+                    ]
+                },
+                {"condition": "no", "path": []}
+            ]
+        },
+        {
+            "type": "exclusiveGateway",
+            "id": "gw_charged_early",
+            "label": "Hotel charged before arrival?",
             "has_join": false,
             "branches": [
                 {
-                    "condition": "Accepted",
+                    "condition": "no",
                     "path": [
                         {
-                            "type": "choreographyTask",
-                            "id": "ct_accept",
-                            "name": "Accept quote",
-                            "initiator": "client",
-                            "recipient": "contractor",
-                            "message": "Acceptance"
-                        },
-                        {"type": "endEvent", "id": "ch_end_ok"}
+                            "type": "endEvent",
+                            "id": "end_fulfilled",
+                            "label": "Contract fulfilled",
+                            "eventDefinition": "terminateEventDefinition"
+                        }
+                    ]
+                },
+                {"condition": "yes", "path": []}
+            ]
+        },
+        {
+            "type": "choreographyTask",
+            "id": "refund_guest",
+            "name": "Refund the guest",
+            "initiator": "hotel",
+            "recipient": "guest",
+            "message": "Refund"
+        },
+        {
+            "type": "exclusiveGateway",
+            "id": "gw_refunded",
+            "label": "Refund provided?",
+            "has_join": false,
+            "branches": [
+                {
+                    "condition": "yes",
+                    "path": [
+                        {
+                            "type": "endEvent",
+                            "id": "end_fulfilled_refund",
+                            "label": "Contract fulfilled",
+                            "eventDefinition": "terminateEventDefinition"
+                        }
                     ]
                 },
                 {
-                    "condition": "Declined",
+                    "condition": "no",
                     "path": [
                         {
-                            "type": "choreographyTask",
-                            "id": "ct_decline",
-                            "name": "Decline quote",
-                            "initiator": "client",
-                            "recipient": "contractor",
-                            "message": "Decline"
-                        },
-                        {"type": "endEvent", "id": "ch_end_no"}
+                            "type": "endEvent",
+                            "id": "end_uncompensated",
+                            "label": "Contract unfulfilled, guest is uncompensated"
+                        }
                     ]
                 }
             ]

@@ -7,12 +7,6 @@ export const REMOTE_SERVICES = [
     url: "https://bpmn-assistant-api.onrender.com",
     path: "/",
   },
-  {
-    id: "layout",
-    label: "BPMN Layout Server",
-    url: "https://bpmn-layout-server.onrender.com",
-    path: "/",
-  },
 ];
 
 const DEFAULT_TIMEOUT_MS = 90_000;

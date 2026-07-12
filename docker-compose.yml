@@ -11,15 +11,6 @@ services:
     networks:
       - bpmn-network
 
-  bpmn_layout_server:
-    build:
-      context: .
-      dockerfile: ./src/bpmn_layout_server/Dockerfile
-    ports:
-      - "3001:3001"
-    networks:
-      - bpmn-network
-
   bpmn_frontend:
     build:
       context: .
@@ -28,7 +19,6 @@ services:
       - "8080:80"
     depends_on:
       - bpmn_assistant
-      - bpmn_layout_server
     networks:
         - bpmn-network
 

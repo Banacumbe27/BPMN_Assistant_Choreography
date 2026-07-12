@@ -9,18 +9,18 @@ The model is a JSON object with two keys:
 }
 ```
 
-Elements in the `choreography` array execute in order based on their position, unless gateways specify branching. The array must contain exactly one start event and at least one end event.
+Elements in the `choreography` array execute in order based on their position, unless gateways specify branching. The array must contain exactly one start event and at least one end event (end events may be nested inside gateway branches).
 
 # Components
 
 ## Choreography task
 
-The core element: one atomic interaction in which an **initiator** participant sends a message to a **recipient** participant. Visually it is a rounded rectangle with two participant bands - the initiator band on **top** (white), the recipient band on the **bottom** (grey) - and an **envelope** for the message.
+The core element: one atomic interaction in which an **initiator** participant sends a message to a **recipient** participant. Visually it is a rounded rectangle with two participant bands - the initiator band on **top** (white), the recipient band on the **bottom** (grey) - and an optional envelope for the message.
 
 - Keep each task atomic: one message exchange. Break complex interactions into multiple tasks.
-- `name` is the interaction label (2-4 words, e.g. "Send order").
-- `initiator` and `recipient` must be ids of declared participants.
-- `message` is the message being sent (optional but recommended; shown as an envelope).
+- `name` is the interaction label (2-5 words, e.g. "Provide alternative room").
+- `initiator` and `recipient` must be ids of declared participants, and must differ.
+- `message` is the message being sent (optional).
 - `return_message` (optional) makes the interaction two-way (a reply on the same task).
 
 ```json
@@ -38,28 +38,34 @@ The core element: one atomic interaction in which an **initiator** participant s
 ## Events
 
 - `startEvent` - where the choreography begins (thin circle). Exactly one.
-- `endEvent` - where it finishes (thick circle). At least one. Include an explicit end event in a branch when that path terminates.
-- `intermediateThrowEvent` / `intermediateCatchEvent` - an event during the flow (double circle), e.g. a timer or message wait. Optional `eventDefinition`: `timerEventDefinition` or `messageEventDefinition`.
+- `endEvent` - where a path finishes (thick circle). At least one. Include an explicit end event in a branch when that path terminates.
+- `intermediateThrowEvent` / `intermediateCatchEvent` - an event during the flow (double circle), e.g. a timer or message wait.
 
 ```json
 { "type": "startEvent" | "endEvent" | "intermediateThrowEvent" | "intermediateCatchEvent", "id": String, "label": String /* OPTIONAL */, "eventDefinition": String /* OPTIONAL */ }
 ```
 
+The optional `eventDefinition` marks the event kind:
+
+- `"conditionalEventDefinition"` (on a start event) - the choreography is triggered by a condition becoming true. Put the triggering condition in `label`.
+- `"terminateEventDefinition"` (on an end event) - a terminating end (filled circle with an inner ring) that ends the whole choreography immediately.
+- `"timerEventDefinition"` / `"messageEventDefinition"` - timer or message events (usually on intermediate events).
+
 ## Gateways
 
-Diamonds controlling sequence flow between interactions. Same grammar as orchestration: branches are **nested inline** inside the gateway.
+Diamonds controlling sequence flow between interactions. Branches are **nested inline** inside the gateway.
 
 - `exclusiveGateway` (X) - exactly one branch taken based on a condition.
 - `parallelGateway` (+) - all branches taken concurrently.
 - `inclusiveGateway` (O) - one or more branches taken based on conditions.
 
-For exclusive/inclusive, each branch has a `condition` and a `path` (array of elements). If a branch loops back to an earlier element, set `next` to that element's id. To end the choreography on a branch, put an `endEvent` in its `path`.
+For exclusive/inclusive, each branch has a `condition` and a `path` (array of elements). The branch `condition` is rendered as the label of the outgoing arrow, so keep it short (e.g. "yes" / "no"). If a branch loops back to an earlier element, set `next` to that element's id. A branch with an **empty `path` and no `next`** simply continues with the element that follows the gateway in the array - use this when one branch continues the main flow. To end the choreography on a branch, put an `endEvent` in its `path`.
 
 ```json
 {
     "type": "exclusiveGateway",
     "id": String,
-    "label": String,
+    "label": String,          // the question asked, e.g. "Alternative room available?"
     "has_join": Boolean,
     "branches": [
         { "condition": String, "path": [ /* elements */ ], "next": String /* OPTIONAL */ }
@@ -72,3 +78,16 @@ Parallel gateway uses `"branches": [ [ /* elements */ ], [ /* elements */ ] ]` (
 ## Sequence flow
 
 The solid arrows between elements are derived automatically from array order, gateway branches, and `next` - you do **not** specify sequence flows explicitly.
+
+# Modeling deontic contract clauses
+
+Contract descriptions are often deontic: they state what a party is **obligated**, **permitted**, or **forbidden** to do, with compensations when an action cannot be fulfilled. Map deontic clauses to choreography patterns as follows:
+
+- **Trigger condition** (*"cond ⊢ ..."*, "if/when cond ..."): a `startEvent` with `"eventDefinition": "conditionalEventDefinition"` and the condition text as `label` (e.g. "Hotel has no seaview room for customer booking the deluxe room").
+- **Obligation** (*party p is obligated to do α*): a `choreographyTask` (initiator = p) representing α, followed by an `exclusiveGateway` asking whether α was fulfilled/available. The "yes" branch leads to an `endEvent` labelled "Contract fulfilled" with `"eventDefinition": "terminateEventDefinition"`. The "no" branch continues with the compensation (or the unfulfilled end, see below).
+- **"Failing which" chain** (*O_p α ⊛ O_q β*: if α cannot be fulfilled, β must be carried out): chain the obligations: task α → gateway "α fulfilled?" → "yes" → terminate end "Contract fulfilled"; "no" → task β → gateway "β fulfilled?" → ... Each fulfilled branch gets its **own** terminate end event.
+- **Last chance to compensate** (*⊛ O_p α.* - the final compensation): the same obligation pattern, but the final "no" branch leads to a **plain** `endEvent` (no `eventDefinition`) labelled with the uncompensated outcome, e.g. "Contract unfulfilled, customer is uncompensated".
+- **Permission** (*party p is permitted to do σ*): an `exclusiveGateway` with `has_join: true` - one branch containing the σ task, the other an empty bypass path - so the flow continues whether or not the permitted action happens.
+- **Forbidden** (*party p must not do α*): an `exclusiveGateway` - the branch "Not doing α" leads to a terminate end "Contract fulfilled"; the branch where α happens continues to the violation consequence/penalty.
+
+Always label gateway branch conditions ("yes" / "no") explicitly, including the branch that leads to a terminal event.

@@ -12,22 +12,44 @@ class TestCreateBpmn:
         bpmn_service = BpmnModelingService()
         mock_llm_facade = Mock(LLMFacade)
 
-        invalid_process = {
-            "process": [
-                {"type": "startEvent"},
+        invalid_choreography = {
+            "participants": [
+                {"id": "a", "name": "A"},
+                {"id": "b", "name": "B"},
+            ],
+            "choreography": [
+                {"type": "startEvent"},  # missing id
                 {
-                    "id": "task1",
-                    "type": "task",
-                    "label": "Perform task",
+                    "type": "choreographyTask",
+                    "id": "t1",
+                    "name": "Interact",
+                    "initiator": "a",
+                    "recipient": "b",
                 },
                 {"id": "end1", "type": "endEvent"},
-            ]
+            ],
         }
 
-        mock_llm_facade.call.return_value = invalid_process
+        mock_llm_facade.call.return_value = invalid_choreography
 
         with pytest.raises(ValueError) as e:
             bpmn_service.create_bpmn(mock_llm_facade, [])
 
         assert "Max number of retries reached" in str(e.value)
         assert mock_llm_facade.call.call_count == 3
+
+    def test_create_bpmn_rejects_orchestration_response(self):
+        """A legacy single-process response must be rejected, not unwrapped."""
+        bpmn_service = BpmnModelingService()
+        mock_llm_facade = Mock(LLMFacade)
+
+        mock_llm_facade.call.return_value = {
+            "process": [
+                {"type": "startEvent", "id": "start"},
+                {"type": "task", "id": "t1", "label": "Do"},
+                {"type": "endEvent", "id": "end"},
+            ]
+        }
+
+        with pytest.raises(ValueError):
+            bpmn_service.create_bpmn(mock_llm_facade, [])

@@ -1,15 +1,13 @@
 """
 Deterministic BPMN diagram-interchange (DI) generator.
 
-The external `bpmn-auto-layout` library cannot lay out collaborations (pools)
-or choreographies, so this module computes coordinates directly in Python and
-injects a <bpmndi:BPMNDiagram> block into the generated BPMN XML.
+The external `bpmn-auto-layout` library cannot lay out choreographies, so this
+module computes coordinates directly in Python and injects a
+<bpmndi:BPMNDiagram> block into the generated BPMN XML.
 
 It reuses BpmnProcessTransformer so the element/flow ids it positions are
 exactly the ids emitted by BpmnXmlGenerator.
 """
-
-from typing import Union
 
 from bpmn_assistant.core.schemas import model_type
 from bpmn_assistant.services.bpmn_process_transformer import BpmnProcessTransformer
@@ -26,9 +24,6 @@ H_SPACING = 150  # horizontal distance between layers (columns)
 V_SPACING = 120  # vertical distance between slots (rows)
 ROW_H = 80  # nominal row height used to vertically center elements
 MARGIN = 50
-POOL_LABEL_W = 30  # width of the vertical pool label strip
-POOL_PAD = 30  # padding inside a pool around its content
-BAND_GAP = 60  # vertical gap between pools
 
 EVENT_TYPES = {
     "startEvent",
@@ -53,87 +48,18 @@ class BpmnLayoutGenerator:
     def __init__(self):
         self.transformer = BpmnProcessTransformer()
 
-    def add_di(self, model: Union[list, dict], bpmn_xml: str) -> str:
+    def add_di(self, model: dict, bpmn_xml: str) -> str:
         """
-        Compute DI for the model and splice it into the generated BPMN XML.
+        Compute DI for the choreography model and splice it into the generated BPMN XML.
         Args:
-            model: the process list / collaboration / choreography dict.
+            model: the choreography dict.
             bpmn_xml: the XML produced by BpmnXmlGenerator for that model.
         Returns:
             The BPMN XML with a <bpmndi:BPMNDiagram> block inserted.
         """
-        kind = model_type(model)
-
-        if kind == "collaboration":
-            di = self._collaboration_di(model)
-        elif kind == "choreography":
-            di = self._choreography_di(model)
-        else:
-            process = model["process"] if isinstance(model, dict) else model
-            di = self._process_di(process)
-
+        model_type(model)  # raises for anything that is not a choreography
+        di = self._choreography_di(model)
         return self._splice(bpmn_xml, di)
-
-    # --- single process ---
-
-    def _process_di(self, process: list) -> str:
-        transformed = self.transformer.transform(process)
-        shapes, edges, _ = self._layout(transformed, origin=(MARGIN, MARGIN))
-        return self._render_diagram("Process_1", shapes, edges)
-
-    # --- collaboration ---
-
-    def _collaboration_di(self, model: dict) -> str:
-        shapes: list[str] = []
-        edges: list[str] = []
-        # element_id -> (x, y, w, h) across the whole collaboration, used to
-        # route message flows between pools.
-        global_boxes: dict[str, tuple[float, float, float, float]] = {}
-
-        band_y = MARGIN
-        content_x = MARGIN + POOL_LABEL_W + POOL_PAD
-
-        for participant in model["participants"]:
-            process = participant.get("process") or []
-            if process:
-                transformed = self.transformer.transform(process)
-                p_shapes, p_edges, boxes = self._layout(
-                    transformed, origin=(content_x, band_y + POOL_PAD)
-                )
-                content_w = max((b[0] + b[2] for b in boxes.values()), default=content_x)
-                content_h = max((b[1] + b[3] for b in boxes.values()), default=band_y)
-                band_h = (content_h - band_y) + POOL_PAD
-                shapes.extend(p_shapes)
-                edges.extend(p_edges)
-                global_boxes.update(boxes)
-            else:
-                # Black-box pool: empty band of a default size.
-                content_w = content_x + 3 * H_SPACING
-                band_h = ROW_H + 2 * POOL_PAD
-
-            pool_w = (content_w - MARGIN) + POOL_PAD
-            shapes.append(
-                self._shape(
-                    participant["id"],
-                    MARGIN,
-                    band_y,
-                    pool_w,
-                    band_h,
-                    is_horizontal=True,
-                )
-            )
-            # Record the pool box so message flows to a black-box pool can attach.
-            global_boxes.setdefault(
-                participant["id"], (MARGIN, band_y, pool_w, band_h)
-            )
-            band_y += band_h + BAND_GAP
-
-        for mf in model.get("message_flows", []):
-            edge = self._message_flow_edge(mf, global_boxes)
-            if edge:
-                edges.append(edge)
-
-        return self._render_diagram("Collaboration_1", shapes, edges)
 
     # --- choreography ---
 
@@ -204,17 +130,43 @@ class BpmnLayoutGenerator:
 
         ranks = self._compute_ranks(elements, flows)
 
+        # A terminating end event fed by a single gateway drops straight below
+        # that gateway (same column) - the usual shape of deontic compensation
+        # chains, where each "Contract fulfilled" hangs under its gateway while
+        # the "no" path continues to the right.
+        incoming: dict[str, list[str]] = {}
+        for f in flows:
+            incoming.setdefault(f["targetRef"], []).append(f["sourceRef"])
+        for e in elements:
+            if (
+                e["type"] == "endEvent"
+                and e.get("eventDefinition") == "terminateEventDefinition"
+                and len(incoming.get(e["id"], [])) == 1
+            ):
+                source = incoming[e["id"]][0]
+                if types.get(source) in GATEWAY_TYPES:
+                    ranks[e["id"]] = ranks[source]
+
         # Group element ids by rank, preserving element order for stable slots.
         by_rank: dict[int, list[str]] = {}
         for e in elements:
             by_rank.setdefault(ranks[e["id"]], []).append(e["id"])
 
+        # Within a rank, keep the continuing (main-chain) elements on the top
+        # row and let end events hang below them.
+        for ids in by_rank.values():
+            ids.sort(key=lambda eid: types[eid] == "endEvent")
+
         ox, oy = origin
         boxes: dict[str, tuple[float, float, float, float]] = {}
         for rank, ids in by_rank.items():
-            x = ox + rank * H_SPACING
+            col_x = ox + rank * H_SPACING
+            col_w = max(_element_size(types[eid])[0] for eid in ids)
             for slot, eid in enumerate(ids):
                 w, h = _element_size(types[eid])
+                # Center each element horizontally within its column so that
+                # vertical connectors (gateway -> end event below) are straight.
+                x = col_x + (col_w - w) / 2
                 y = oy + slot * V_SPACING + (ROW_H - h) / 2
                 boxes[eid] = (x, y, w, h)
 
@@ -290,11 +242,8 @@ class BpmnLayoutGenerator:
         y: float,
         w: float,
         h: float,
-        is_horizontal: bool = False,
     ) -> str:
         attrs = f'id="{bpmn_element}_di" bpmnElement="{bpmn_element}"'
-        if is_horizontal:
-            attrs += ' isHorizontal="true"'
         return (
             f'<bpmndi:BPMNShape {attrs}>'
             f'<dc:Bounds x="{_n(x)}" y="{_n(y)}" width="{_n(w)}" height="{_n(h)}" />'
@@ -304,6 +253,11 @@ class BpmnLayoutGenerator:
     def _sequence_edge(self, flow: dict, boxes: dict) -> str:
         sx, sy, sw, sh = boxes[flow["sourceRef"]]
         tx, ty, tw, th = boxes[flow["targetRef"]]
+        # Target sits (roughly) directly below the source: drop a straight
+        # vertical connector from the source's bottom to the target's top.
+        if ty >= sy + sh and abs((sx + sw / 2) - (tx + tw / 2)) < 1:
+            waypoints = [(sx + sw / 2, sy + sh), (tx + tw / 2, ty)]
+            return self._edge(flow["id"], waypoints)
         start = (sx + sw, sy + sh / 2)
         end = (tx, ty + th / 2)
         if abs(start[1] - end[1]) < 1:
@@ -312,22 +266,6 @@ class BpmnLayoutGenerator:
             mid_x = (start[0] + end[0]) / 2
             waypoints = [start, (mid_x, start[1]), (mid_x, end[1]), end]
         return self._edge(flow["id"], waypoints)
-
-    def _message_flow_edge(self, mf: dict, boxes: dict) -> str | None:
-        if mf["sourceRef"] not in boxes or mf["targetRef"] not in boxes:
-            return None
-        sx, sy, sw, sh = boxes[mf["sourceRef"]]
-        tx, ty, tw, th = boxes[mf["targetRef"]]
-        # Vertical connector between bands (source above or below target).
-        if sy < ty:
-            start = (sx + sw / 2, sy + sh)
-            end = (tx + tw / 2, ty)
-        else:
-            start = (sx + sw / 2, sy)
-            end = (tx + tw / 2, ty + th)
-        mid_y = (start[1] + end[1]) / 2
-        waypoints = [start, (start[0], mid_y), (end[0], mid_y), end]
-        return self._edge(mf["id"], waypoints)
 
     def _edge(self, bpmn_element: str, waypoints: list[tuple[float, float]]) -> str:
         wps = "".join(

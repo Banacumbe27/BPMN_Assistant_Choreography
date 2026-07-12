@@ -4,21 +4,16 @@ from starlette.middleware.cors import CORSMiddleware
 
 from bpmn_assistant.api.requests import (
     AvailableProvidersRequest,
-    BpmnToJsonRequest,
     ConversationalRequest,
     DetermineIntentRequest,
     ModifyBpmnRequest,
 )
 from bpmn_assistant.core import handle_exceptions
-from bpmn_assistant.core.enums import OutputMode
-from bpmn_assistant.core.schemas import model_type
 from bpmn_assistant.services import (
-    BpmnJsonGenerator,
     BpmnLayoutGenerator,
     BpmnModelingService,
     BpmnXmlGenerator,
     ConversationalService,
-    determine_diagram_type,
     determine_intent,
 )
 from bpmn_assistant.utils import (
@@ -58,17 +53,6 @@ async def health_check():
     return {"status": "ok"}
 
 
-@app.post("/bpmn_to_json")
-@handle_exceptions
-async def _bpmn_to_json(request: BpmnToJsonRequest) -> JSONResponse:
-    """
-    Convert the BPMN XML to its JSON representation
-    """
-    bpmn_json_generator = BpmnJsonGenerator()
-    result = bpmn_json_generator.create_bpmn_json(request.bpmn_xml)
-    return JSONResponse(content=result)
-
-
 @app.post("/available_providers")
 @handle_exceptions
 async def _available_providers(request: AvailableProvidersRequest) -> JSONResponse:
@@ -95,45 +79,25 @@ async def _determine_intent(request: DetermineIntentRequest) -> JSONResponse:
 @handle_exceptions
 async def _modify(request: ModifyBpmnRequest) -> JSONResponse:
     """
-    Modify the BPMN process based on the user query. If the request does not contain a BPMN JSON,
-    then create a new BPMN process. Otherwise, edit the existing BPMN process.
+    Create or update the BPMN choreography based on the user query. If the
+    request contains an existing choreography, the LLM regenerates the complete
+    model with the requested changes applied.
     """
     llm_facade = get_llm_facade(request.model, api_keys=request.api_keys)
-    text_llm_facade = get_llm_facade(
-        request.model, OutputMode.TEXT, api_keys=request.api_keys
-    )
     images = extract_images_from_message_history(request.message_history)
 
-    if request.process:
-        process = bpmn_modeling_service.edit_bpmn(
-            llm_facade,
-            text_llm_facade,
-            request.process,
-            request.message_history,
-            images=images,
-        )
-    else:
-        # Classify the diagram type on a separate facade so the create facade's
-        # message history stays clean. Choreography routes to a dedicated prompt;
-        # process vs collaboration is self-selected by the create prompt.
-        classifier_facade = get_llm_facade(request.model, api_keys=request.api_keys)
-        diagram_type = determine_diagram_type(
-            classifier_facade, request.message_history, images=images
-        )["diagram_type"]
-        process = bpmn_modeling_service.create_bpmn(
-            llm_facade,
-            request.message_history,
-            images=images,
-            diagram_type=diagram_type,
-        )
+    process = bpmn_modeling_service.create_bpmn(
+        llm_facade,
+        request.message_history,
+        images=images,
+        current_model=request.process or None,
+    )
 
     bpmn_xml_string = bpmn_xml_generator.create_bpmn_xml(process)
 
-    # Collaborations and choreographies cannot be laid out by the JS
-    # bpmn-auto-layout service, so we embed deterministic DI here. Single
-    # processes are left without DI and laid out by the layout server as before.
-    if model_type(process) in ("collaboration", "choreography"):
-        bpmn_xml_string = bpmn_layout_generator.add_di(process, bpmn_xml_string)
+    # The JS bpmn-auto-layout service cannot lay out choreographies, so we
+    # embed deterministic DI here.
+    bpmn_xml_string = bpmn_layout_generator.add_di(process, bpmn_xml_string)
 
     return JSONResponse(content={"bpmn_xml": bpmn_xml_string, "bpmn_json": process})
 

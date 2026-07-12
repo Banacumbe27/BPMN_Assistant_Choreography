@@ -1,8 +1,5 @@
 <script>
 import ChatInterface from '../components/ChatInterface.vue';
-import { bpmnAssistantUrl, bpmnLayoutServerUrl } from '../config';
-import { getApiKeys } from '../utils/apiKeys';
-import sampleBpmn from '../assets/jadeHotelVip.bpmn?raw';
 import { markRaw } from 'vue';
 
 const Modeler = window.ChorJSModeler || window.ChorJS;
@@ -33,8 +30,6 @@ export default {
         },
       }),
     );
-
-    await this.loadSampleDiagram();
   },
   beforeUnmount() {
     if (this.bpmnViewer) {
@@ -47,9 +42,12 @@ export default {
       this.snackbar.color = color;
       this.snackbar.show = true;
     },
-    async loadSampleDiagram() {
-      this.bpmnXml = sampleBpmn;
-      await this.importDiagram(sampleBpmn);
+    clearDiagram() {
+      this.bpmnXml = '';
+      this.process = null;
+      if (typeof this.bpmnViewer?.clear === 'function') {
+        this.bpmnViewer.clear();
+      }
     },
     async importDiagram(xmlContent) {
       if (!this.bpmnViewer) {
@@ -75,9 +73,16 @@ export default {
                 try {
                   await this.importDiagram(xmlContent);
                   this.bpmnXml = xmlContent;
-                  await this.createBpmnJson();
+                  // Imported files are view-only: the assistant only edits
+                  // choreographies it generated itself.
+                  this.process = null;
+                  this.showSnackbar('BPMN file loaded', 'success');
                 } catch (err) {
                   console.error('Failed to import BPMN diagram:', err);
+                  this.showSnackbar(
+                    'There was a problem while loading the BPMN file',
+                    'error',
+                  );
                 }
               };
               reader.readAsText(file);
@@ -86,74 +91,20 @@ export default {
         }
       }
     },
-    async createBpmnJson() {
-      try {
-        const apiKeys = getApiKeys();
-        const response = await fetch(`${bpmnAssistantUrl}/bpmn_to_json`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ bpmn_xml: this.bpmnXml, api_keys: apiKeys }),
-        });
-
-        if (!response.ok) {
-          throw new Error(`HTTP error! Status: ${response.status}`);
-        }
-
-        this.process = await response.json();
-        console.log('BPMN JSON created successfully:', this.process);
-        this.showSnackbar('BPMN successfully uploaded', 'success');
-      } catch (error) {
-        console.error('Error creating BPMN JSON:', error);
-        this.showSnackbar(
-          'There was a problem while loading the BPMN file',
-          'error',
-        );
-      }
-    },
     async handleBpmnXml(bpmnXmlValue) {
       if (bpmnXmlValue === '') {
-        await this.loadSampleDiagram();
+        this.clearDiagram();
         return;
       }
 
       try {
-        // Collaborations and choreographies arrive already laid out (the
-        // backend embeds DI, since the JS auto-layout service cannot handle
-        // pools/choreography). Single processes still need auto-layout.
-        const alreadyLaidOut = bpmnXmlValue.includes('BPMNDiagram');
-        const layoutedXml = alreadyLaidOut
-          ? bpmnXmlValue
-          : await this.processDiagram(bpmnXmlValue);
-        if (!layoutedXml) {
-          throw new Error('Failed to layout the BPMN diagram');
-        }
-        this.bpmnXml = layoutedXml;
-        await this.importDiagram(layoutedXml);
+        // Choreographies always arrive already laid out: the backend embeds
+        // deterministic DI, since the JS auto-layout service cannot handle
+        // choreography diagrams.
+        this.bpmnXml = bpmnXmlValue;
+        await this.importDiagram(bpmnXmlValue);
       } catch (error) {
         console.error('Error handling BPMN XML:', error);
-      }
-    },
-    async processDiagram(bpmnDiagram) {
-      try {
-        const response = await fetch(`${bpmnLayoutServerUrl}/process-bpmn`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({ bpmnXml: bpmnDiagram }),
-        });
-
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-
-        const { layoutedXml } = await response.json();
-
-        console.log(layoutedXml);
-
-        return layoutedXml;
-      } catch (error) {
-        console.error('Failed to process the diagram:', error);
       }
     },
     async downloadBpmnFile() {
